@@ -31,11 +31,14 @@ ERR_DIRECTORIO=2
 ERR_ROOT=3
 ERR_APLICACION=4
 ERR_IMPORT=5
+ERR_COPIAR=6
+
+NOMBRE_SCRIPT=`basename $0`
 
 # Muestra los mensajes de error
 error()
 {
-	echo "$0: ERROR $1" 1>&2
+	echo "$NOMBRE_SCRIPT: ERROR $1" 1>&2
 	return $EXITO
 }
 
@@ -44,7 +47,7 @@ esroot()
 {
 	if [ $(id -u) -ne 0 ]
 	then
-	   error "Este script debe ser ejecutado como root"
+	   error "$NOMBRE_SCRIPT debe ser ejecutado como root"
 	   exit $ERR_ROOT
 	fi
 	
@@ -74,26 +77,26 @@ direxiste()
 		error "'$1' no es un directorio valido."
 	fi
 	
-	return $ERR_DIRECTORIO
+	exit $ERR_DIRECTORIO
 
 }
 
 # Verifica si una aplicacion existe
 appexiste()
 {
-	echo "$0: Buscando $1 ..."
+	echo "Buscando '$1' ..."
 	IFS=:
 	for dir in $PATH
 	do
 		if  test -f $dir/$1
 		then
-			echo "$0: $1 encontrada... Exito!"
-			return $ERR_APLICACION
+			echo "$NOMBRE_SCRIPT: '$1' encontrada... Exito!"
+			return $EXITO
 		fi
 	done
 	
-	error "La aplicación $1 no existe por favor verifique que esté instalada"
-	return $EXITO
+	error "La aplicación '$1' no existe por favor verifique que esté instalada"
+	return $ERR_APLICACION
 }
 
 # Importa un script a mysql
@@ -101,24 +104,34 @@ mysqlimport()
 {
 	usr=$1
 	psw=$2
-	scr=$3
-	
-	if mysql -u$usr -p$psw < $src
+	src=`cat $3`
+	echo $src
+	mysql -u$usr -p$psw -e "$src"
+
+	if [ $? -eq 0 ]
 	then
 		return $EXITO
 	else
-		return $ERR_IMPORT
+		error "Hubo un problema al cargar la nueva base de datos."
+		exit $ERR_IMPORT
 	fi
 }
 
 # $# es el numero de parametros ingresados
 # $1 es la carpeta fuente
 # $2 es la carpeta destino o la ruta del servidor
-
-# Validaciones Generales
+# $3 usuario del MySQL
+# $4 clave del MySQL
+# $5 script SQL
 
 esroot
-numeroarg
+
+numeroarg $# 5
+
+if (! appexiste mysql)
+then
+	exit $ERR_APLICACION
+fi
 
 # Inicializando variables
 if direxiste $1
@@ -131,19 +144,23 @@ then
 	dir_destino=$2
 fi
 
-if ( cp -vR $dir_origen $dir_destino )
+usuario=$3
+clave=$4
+script_bd=$5
+
+# Comienza el copiado
+cp -R $dir_origen $dir_destino
+if [ $? -eq 0 ]
 then
-	if appexiste mysql
+	if mysqlimport $usuario $clave $script_bd
 	then
-		if mysqlimport $usuario $clave $script_bd
+		echo "$0: EXITO! el sistema ya esta instalado."
+		return $EXITO
 	fi
+else
+	error "Hubo un error y no se pudo instalar"
 fi
 
-
-
-
-
-
-
+return $ERR_COPIAR
 
 
