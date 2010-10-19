@@ -1,6 +1,9 @@
 #!/bin/sh
 
 ###############################################################################
+#                                                                             #
+# Copyright (C) 2010  Erick Birbe                                             #
+#                                                                             #
 # Este programa es Sofware Libre; puedes redistribuirlo y/o modificarlo bajo  #
 # los terminos de la GNU General Public License como la publica la Free       #
 # Software Fundation; en la version 2 de la licencia, o (a su elección)	      #
@@ -18,26 +21,47 @@
 # Pagina Principal: http://github.com/erickcion/instalasite                   #
 # Creado por: Erick Birbe <erickcion@gmail.com>                               #
 # Fecha Creación: 18 de Abril de 2010                                         #
+#                                                                             #
 ###############################################################################
 
+# Creacion de Constantes
 EXITO=0
 ERR_ARGUMENTO=1
 ERR_DIRECTORIO=2
-
-# Verifica si quien ejecuta el script es "root"
-esroot()
-{
-	if [[ $EUID -ne 0 ]]; then
-	   error "Este script debe ser ejecutado como root"
-	   exit 1
-	fi	
-}
+ERR_ROOT=3
+ERR_APLICACION=4
+ERR_IMPORT=5
 
 # Muestra los mensajes de error
 error()
 {
-	echo $1 1>&2
-	return 0
+	echo "$0: ERROR $1" 1>&2
+	return $EXITO
+}
+
+# Verifica si quien ejecuta el script es "root"
+esroot()
+{
+	if [ $(id -u) -ne 0 ]
+	then
+	   error "Este script debe ser ejecutado como root"
+	   exit $ERR_ROOT
+	fi
+	
+	return $EXITO	
+}
+# Verifica que el numero de argumentos introducido sea correcto
+numeroarg()
+{
+# $1 numero de argumentos ingresados
+# $2 numero maximo
+	if [ $1 -lt $2 ]
+	then
+		error "Argumentos insuficientes."
+		echo "USO:"
+		echo "\t$0 carpeta_origen carpeta_servidor usuario clave script"
+		exit $ERR_ARGUMENTO
+	fi
 }
 
 # Verifica si un directorio existe
@@ -47,11 +71,44 @@ direxiste()
 	then
 		return $EXITO
 	else
-		error "$0: '$1' no es un directorio valido."
+		error "'$1' no es un directorio valido."
 	fi
 	
 	return $ERR_DIRECTORIO
 
+}
+
+# Verifica si una aplicacion existe
+appexiste()
+{
+	echo "$0: Buscando $1 ..."
+	IFS=:
+	for dir in $PATH
+	do
+		if  test -f $dir/$1
+		then
+			echo "$0: $1 encontrada... Exito!"
+			return $ERR_APLICACION
+		fi
+	done
+	
+	error "La aplicación $1 no existe por favor verifique que esté instalada"
+	return $EXITO
+}
+
+# Importa un script a mysql
+mysqlimport()
+{
+	usr=$1
+	psw=$2
+	scr=$3
+	
+	if mysql -u$usr -p$psw < $src
+	then
+		return $EXITO
+	else
+		return $ERR_IMPORT
+	fi
 }
 
 # $# es el numero de parametros ingresados
@@ -59,23 +116,30 @@ direxiste()
 # $2 es la carpeta destino o la ruta del servidor
 
 # Validaciones Generales
-if [ $# -lt 2 ] 
+
+esroot
+numeroarg
+
+# Inicializando variables
+if direxiste $1
 then
-	error "$0: Argumentos insuficientes."
-	echo "USO: $0 carpeta_origen carpeta_servidor"
-	exit $ERR_ARGUMENTO
+	dir_origen=$1
 fi
 
-# Inicializando variables por defecto
-if  direxiste $1
+if direxiste $2 
 then
-	DIR_ORIGEN=$1
+	dir_destino=$2
 fi
 
-if direxiste $2
+if ( cp -vR $dir_origen $dir_destino )
 then
-	DIR_DESTINO=$2
+	if appexiste mysql
+	then
+		if mysqlimport $usuario $clave $script_bd
+	fi
 fi
+
+
 
 
 
